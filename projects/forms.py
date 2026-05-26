@@ -1,12 +1,12 @@
 from django import forms
 
 from utils import validate_github_url
-from .models import Project
+from .models import PROJECT_STATUS_CLOSED, PROJECT_STATUS_OPEN, Project
 
 
 class ProjectForm(forms.ModelForm):
     status = forms.ChoiceField(
-        choices=[('open', 'Открыт'), ('closed', 'Закрыт')],
+        choices=[(PROJECT_STATUS_OPEN, 'Открыт'), (PROJECT_STATUS_CLOSED, 'Закрыт')],
         label='Статус',
     )
 

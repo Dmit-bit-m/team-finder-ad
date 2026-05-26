@@ -28,7 +28,7 @@ def login_view(request):
         form = LoginForm(request.POST)
         if form.is_valid():
             login(request, form.cleaned_data['user'])
-            return redirect('/projects/list/')
+            return redirect('projects:list')
     else:
         form = LoginForm()
     return render(request, 'users/login.html', {'form': form})
@@ -36,7 +36,7 @@ def login_view(request):
 
 def logout_view(request):
     logout(request)
-    return redirect('/projects/list/')
+    return redirect('projects:list')
 
 
 def user_detail(request, user_id):
@@ -50,7 +50,7 @@ def edit_profile(request):
         form = EditProfileForm(request.POST, request.FILES, instance=request.user)
         if form.is_valid():
             form.save()
-            return redirect(f'/users/{request.user.id}/')
+            return redirect('users:detail', user_id=request.user.id)
     else:
         form = EditProfileForm(instance=request.user)
     return render(request, 'users/edit_profile.html', {'form': form, 'user': request.user})
@@ -64,7 +64,7 @@ def change_password(request):
             request.user.set_password(form.cleaned_data['new_password1'])
             request.user.save()
             update_session_auth_hash(request, request.user)
-            return redirect(f'/users/{request.user.id}/')
+            return redirect('users:detail', user_id=request.user.id)
     else:
         form = ChangePasswordForm(request.user)
     return render(request, 'users/change_password.html', {'form': form})
@@ -72,7 +72,7 @@ def change_password(request):
 
 def users_list(request):
     qs = User.objects.all().order_by('-id')
-    page = paginate_queryset(qs, request.GET.get('page', 1))
+    page = paginate_queryset(qs, request)
     return render(request, 'users/participants.html', {
         'participants': page,
         'page_obj': page,

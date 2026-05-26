@@ -4,16 +4,37 @@ from http import HTTPStatus
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
-from projects.models import Project, Skill
+from projects.models import PROJECT_STATUS_CLOSED, PROJECT_STATUS_OPEN, Project, Skill
 
 User = get_user_model()
 
+# Default user data
+DEFAULT_EMAIL = 'user@example.com'
+DEFAULT_NAME = 'Иван'
+DEFAULT_SURNAME = 'Петров'
+DEFAULT_PASSWORD = 'testpass123'
 
-def create_user(email='user@example.com', name='Иван', surname='Петров', password='testpass123'):
+# Default project / skill data
+DEFAULT_PROJECT_NAME = 'Test Project'
+DEFAULT_SKILL_NAME = 'Python'
+
+# URLs
+PROJECT_LIST_URL = '/projects/list/'
+CREATE_PROJECT_URL = '/projects/create-project/'
+SKILLS_AUTOCOMPLETE_URL = '/projects/skills/'
+LOGIN_URL = '/users/login/'
+
+
+def create_user(
+    email=DEFAULT_EMAIL,
+    name=DEFAULT_NAME,
+    surname=DEFAULT_SURNAME,
+    password=DEFAULT_PASSWORD,
+):
     return User.objects.create_user(email=email, name=name, surname=surname, password=password)
 
 
-def create_project(owner, name='Test Project', status='open', **kwargs):
+def create_project(owner, name=DEFAULT_PROJECT_NAME, status=PROJECT_STATUS_OPEN, **kwargs):
     return Project.objects.create(name=name, owner=owner, status=status, **kwargs)
 
 
@@ -34,50 +55,50 @@ class RootRedirectTest(TestCase):
 class ProjectListTest(TestCase):
     def setUp(self):
         self.owner = create_user()
-        self.skill = Skill.objects.create(name='Python')
+        self.skill = Skill.objects.create(name=DEFAULT_SKILL_NAME)
         for i in range(15):
             p = create_project(self.owner, name=f'Project {i}')
             if i < 5:
                 p.skills.add(self.skill)
 
     def test_project_list_returns_200(self):
-        response = self.client.get('/projects/list/')
+        response = self.client.get(PROJECT_LIST_URL)
         self.assertEqual(response.status_code, HTTPStatus.OK)
 
     def test_project_list_accessible_without_auth(self):
-        response = self.client.get('/projects/list/')
+        response = self.client.get(PROJECT_LIST_URL)
         self.assertEqual(response.status_code, HTTPStatus.OK)
 
     def test_project_list_paginates_12_per_page(self):
-        response = self.client.get('/projects/list/')
+        response = self.client.get(PROJECT_LIST_URL)
         self.assertEqual(len(response.context['projects'].object_list), 12)
 
     def test_project_list_second_page_has_remaining(self):
-        response = self.client.get('/projects/list/?page=2')
+        response = self.client.get(f'{PROJECT_LIST_URL}?page=2')
         self.assertEqual(response.status_code, HTTPStatus.OK)
         self.assertEqual(len(response.context['projects'].object_list), 3)
 
     def test_filter_by_skill_returns_only_matching_projects(self):
-        response = self.client.get('/projects/list/?skill=Python')
+        response = self.client.get(f'{PROJECT_LIST_URL}?skill={DEFAULT_SKILL_NAME}')
         self.assertEqual(response.status_code, HTTPStatus.OK)
         for project in response.context['projects']:
-            self.assertIn('Python', list(project.skills.values_list('name', flat=True)))
+            self.assertIn(DEFAULT_SKILL_NAME, list(project.skills.values_list('name', flat=True)))
 
     def test_filter_by_skill_excludes_projects_without_skill(self):
-        response = self.client.get('/projects/list/?skill=Python')
+        response = self.client.get(f'{PROJECT_LIST_URL}?skill={DEFAULT_SKILL_NAME}')
         self.assertEqual(len(response.context['projects'].object_list), 5)
 
     def test_filter_sets_active_skill_in_context(self):
-        response = self.client.get('/projects/list/?skill=Python')
-        self.assertEqual(response.context['active_skill'], 'Python')
+        response = self.client.get(f'{PROJECT_LIST_URL}?skill={DEFAULT_SKILL_NAME}')
+        self.assertEqual(response.context['active_skill'], DEFAULT_SKILL_NAME)
 
     def test_all_skills_present_in_context(self):
-        response = self.client.get('/projects/list/')
+        response = self.client.get(PROJECT_LIST_URL)
         self.assertIn('all_skills', response.context)
-        self.assertIn('Python', response.context['all_skills'])
+        self.assertIn(DEFAULT_SKILL_NAME, response.context['all_skills'])
 
     def test_projects_sorted_newest_first(self):
-        response = self.client.get('/projects/list/')
+        response = self.client.get(PROJECT_LIST_URL)
         projects = list(response.context['projects'].object_list)
         dates = [p.created_at for p in projects]
         self.assertEqual(dates, sorted(dates, reverse=True))
@@ -136,57 +157,62 @@ class CreateProjectTest(TestCase):
         self.user = create_user()
 
     def test_create_project_requires_auth(self):
-        response = self.client.get('/projects/create-project/')
+        response = self.client.get(CREATE_PROJECT_URL)
         self.assertEqual(response.status_code, HTTPStatus.FOUND)
-        self.assertIn('/users/login/', response['Location'])
+        self.assertIn(LOGIN_URL, response['Location'])
 
     def test_create_project_page_returns_200_for_authenticated(self):
         self.client.force_login(self.user)
-        response = self.client.get('/projects/create-project/')
+        response = self.client.get(CREATE_PROJECT_URL)
         self.assertEqual(response.status_code, HTTPStatus.OK)
 
     def test_create_project_passes_is_edit_false(self):
         self.client.force_login(self.user)
-        response = self.client.get('/projects/create-project/')
+        response = self.client.get(CREATE_PROJECT_URL)
         self.assertFalse(response.context['is_edit'])
+
+    NEW_PROJECT_NAME = 'New Project'
 
     def test_valid_create_sets_owner(self):
         self.client.force_login(self.user)
-        self.client.post('/projects/create-project/', {
-            'name': 'New Project', 'description': '', 'github_url': '', 'status': 'open',
+        self.client.post(CREATE_PROJECT_URL, {
+            'name': self.NEW_PROJECT_NAME, 'description': '', 'github_url': '',
+            'status': PROJECT_STATUS_OPEN,
         })
-        project = Project.objects.get(name='New Project')
+        project = Project.objects.get(name=self.NEW_PROJECT_NAME)
         self.assertEqual(project.owner, self.user)
 
     def test_valid_create_adds_owner_as_participant(self):
         self.client.force_login(self.user)
-        self.client.post('/projects/create-project/', {
-            'name': 'New Project', 'description': '', 'github_url': '', 'status': 'open',
+        self.client.post(CREATE_PROJECT_URL, {
+            'name': self.NEW_PROJECT_NAME, 'description': '', 'github_url': '',
+            'status': PROJECT_STATUS_OPEN,
         })
-        project = Project.objects.get(name='New Project')
+        project = Project.objects.get(name=self.NEW_PROJECT_NAME)
         self.assertIn(self.user, project.participants.all())
 
     def test_valid_create_redirects_to_project_page(self):
         self.client.force_login(self.user)
-        response = self.client.post('/projects/create-project/', {
-            'name': 'New Project', 'description': '', 'github_url': '', 'status': 'open',
+        response = self.client.post(CREATE_PROJECT_URL, {
+            'name': self.NEW_PROJECT_NAME, 'description': '', 'github_url': '',
+            'status': PROJECT_STATUS_OPEN,
         })
-        project = Project.objects.get(name='New Project')
+        project = Project.objects.get(name=self.NEW_PROJECT_NAME)
         self.assertRedirects(response, f'/projects/{project.id}/')
 
     def test_non_github_url_rerenders_form(self):
         self.client.force_login(self.user)
-        response = self.client.post('/projects/create-project/', {
-            'name': 'New Project', 'description': '',
-            'github_url': 'https://gitlab.com/repo', 'status': 'open',
+        response = self.client.post(CREATE_PROJECT_URL, {
+            'name': self.NEW_PROJECT_NAME, 'description': '',
+            'github_url': 'https://gitlab.com/repo', 'status': PROJECT_STATUS_OPEN,
         })
         self.assertEqual(response.status_code, HTTPStatus.OK)
-        self.assertFalse(Project.objects.filter(name='New Project').exists())
+        self.assertFalse(Project.objects.filter(name=self.NEW_PROJECT_NAME).exists())
 
     def test_empty_name_rerenders_form(self):
         self.client.force_login(self.user)
-        response = self.client.post('/projects/create-project/', {
-            'name': '', 'description': '', 'github_url': '', 'status': 'open',
+        response = self.client.post(CREATE_PROJECT_URL, {
+            'name': '', 'description': '', 'github_url': '', 'status': PROJECT_STATUS_OPEN,
         })
         self.assertEqual(response.status_code, HTTPStatus.OK)
 
@@ -203,7 +229,7 @@ class EditProjectTest(TestCase):
 
     def test_edit_project_requires_auth(self):
         response = self.client.get(f'/projects/{self.project.id}/edit/')
-        self.assertIn('/users/login/', response['Location'])
+        self.assertIn(LOGIN_URL, response['Location'])
 
     def test_edit_accessible_by_owner(self):
         self.client.force_login(self.owner)
@@ -225,20 +251,22 @@ class EditProjectTest(TestCase):
         response = self.client.get(f'/projects/{self.project.id}/edit/')
         self.assertEqual(response.status_code, HTTPStatus.NOT_FOUND)
 
+    UPDATED_NAME = 'Updated Name'
+
     def test_edit_saves_changes(self):
         self.client.force_login(self.owner)
         self.client.post(f'/projects/{self.project.id}/edit/', {
-            'name': 'Updated Name', 'description': 'New desc',
-            'github_url': '', 'status': 'open',
+            'name': self.UPDATED_NAME, 'description': 'New desc',
+            'github_url': '', 'status': PROJECT_STATUS_OPEN,
         })
         self.project.refresh_from_db()
-        self.assertEqual(self.project.name, 'Updated Name')
+        self.assertEqual(self.project.name, self.UPDATED_NAME)
 
     def test_edit_redirects_to_project_page(self):
         self.client.force_login(self.owner)
         response = self.client.post(f'/projects/{self.project.id}/edit/', {
-            'name': 'Updated Name', 'description': '',
-            'github_url': '', 'status': 'open',
+            'name': self.UPDATED_NAME, 'description': '',
+            'github_url': '', 'status': PROJECT_STATUS_OPEN,
         })
         self.assertRedirects(response, f'/projects/{self.project.id}/')
 
@@ -284,7 +312,7 @@ class CompleteProjectTest(TestCase):
         self.assertEqual(response.status_code, HTTPStatus.FORBIDDEN)
 
     def test_already_closed_project_returns_400(self):
-        self.project.status = 'closed'
+        self.project.status = PROJECT_STATUS_CLOSED
         self.project.save()
         self.client.force_login(self.owner)
         response = self._post_complete()
@@ -340,48 +368,55 @@ class ToggleParticipateTest(TestCase):
 # ---------------------------------------------------------------------------
 
 class SkillsAutocompleteTest(TestCase):
+    SKILL_POSTGRESQL = 'PostgreSQL'
+    SKILL_REACT = 'React'
+    AUTOCOMPLETE_PREFIX = 'Py'
+    AUTOCOMPLETE_PREFIX_LOWER = 'py'
+
     def setUp(self):
-        Skill.objects.create(name='Python')
-        Skill.objects.create(name='PostgreSQL')
-        Skill.objects.create(name='React')
+        Skill.objects.create(name=DEFAULT_SKILL_NAME)
+        Skill.objects.create(name=self.SKILL_POSTGRESQL)
+        Skill.objects.create(name=self.SKILL_REACT)
 
     def test_autocomplete_returns_200(self):
-        response = self.client.get('/projects/skills/?q=Py')
+        response = self.client.get(f'{SKILLS_AUTOCOMPLETE_URL}?q={self.AUTOCOMPLETE_PREFIX}')
         self.assertEqual(response.status_code, HTTPStatus.OK)
 
     def test_autocomplete_returns_json(self):
-        response = self.client.get('/projects/skills/?q=Py')
+        response = self.client.get(f'{SKILLS_AUTOCOMPLETE_URL}?q={self.AUTOCOMPLETE_PREFIX}')
         data = json.loads(response.content)
         self.assertIsInstance(data, list)
 
     def test_autocomplete_matches_prefix(self):
-        response = self.client.get('/projects/skills/?q=Py')
+        response = self.client.get(f'{SKILLS_AUTOCOMPLETE_URL}?q={self.AUTOCOMPLETE_PREFIX}')
         data = json.loads(response.content)
         names = [s['name'] for s in data]
-        self.assertIn('Python', names)
-        self.assertNotIn('React', names)
+        self.assertIn(DEFAULT_SKILL_NAME, names)
+        self.assertNotIn(self.SKILL_REACT, names)
 
     def test_autocomplete_case_insensitive(self):
-        response = self.client.get('/projects/skills/?q=py')
+        response = self.client.get(f'{SKILLS_AUTOCOMPLETE_URL}?q={self.AUTOCOMPLETE_PREFIX_LOWER}')
         data = json.loads(response.content)
         names = [s['name'] for s in data]
-        self.assertIn('Python', names)
+        self.assertIn(DEFAULT_SKILL_NAME, names)
 
     def test_autocomplete_returns_id_and_name(self):
-        response = self.client.get('/projects/skills/?q=Py')
+        response = self.client.get(f'{SKILLS_AUTOCOMPLETE_URL}?q={self.AUTOCOMPLETE_PREFIX}')
         data = json.loads(response.content)
         self.assertIn('id', data[0])
         self.assertIn('name', data[0])
 
     def test_autocomplete_empty_query_returns_empty_list(self):
-        response = self.client.get('/projects/skills/')
+        response = self.client.get(SKILLS_AUTOCOMPLETE_URL)
         data = json.loads(response.content)
         self.assertEqual(data, [])
+
+    BULK_SKILL_PREFIX = 'Ski'
 
     def test_autocomplete_returns_at_most_10_results(self):
         for i in range(15):
             Skill.objects.create(name=f'Skill{i}')
-        response = self.client.get('/projects/skills/?q=Ski')
+        response = self.client.get(f'{SKILLS_AUTOCOMPLETE_URL}?q={self.BULK_SKILL_PREFIX}')
         data = json.loads(response.content)
         self.assertLessEqual(len(data), 10)
 
@@ -395,7 +430,7 @@ class SkillsAddRemoveTest(TestCase):
         self.owner = create_user()
         self.other = create_user(email='other@example.com')
         self.project = create_project(self.owner)
-        self.skill = Skill.objects.create(name='Python')
+        self.skill = Skill.objects.create(name=DEFAULT_SKILL_NAME)
 
     def _add_skill(self, payload):
         return self.client.post(

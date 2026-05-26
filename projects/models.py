@@ -6,6 +6,10 @@ SKILL_NAME_MAX_LENGTH = 124
 PROJECT_NAME_MAX_LENGTH = 200
 PROJECT_STATUS_MAX_LENGTH = 6
 
+# Project status values
+PROJECT_STATUS_OPEN = 'open'
+PROJECT_STATUS_CLOSED = 'closed'
+
 
 class Skill(models.Model):
     name = models.CharField(max_length=SKILL_NAME_MAX_LENGTH)
@@ -18,7 +22,7 @@ class Skill(models.Model):
 
 
 class Project(models.Model):
-    STATUS_CHOICES = [('open', 'Open'), ('closed', 'Closed')]
+    STATUS_CHOICES = [(PROJECT_STATUS_OPEN, 'Open'), (PROJECT_STATUS_CLOSED, 'Closed')]
 
     name = models.CharField(max_length=PROJECT_NAME_MAX_LENGTH)
     description = models.TextField(blank=True)
@@ -32,7 +36,7 @@ class Project(models.Model):
     status = models.CharField(
         max_length=PROJECT_STATUS_MAX_LENGTH,
         choices=STATUS_CHOICES,
-        default='open',
+        default=PROJECT_STATUS_OPEN,
     )
     participants = models.ManyToManyField(
         settings.AUTH_USER_MODEL,

@@ -2,12 +2,12 @@ from django import forms
 from django.core.exceptions import ValidationError
 
 from utils import validate_github_url, validate_phone
-from .models import User
+from .models import USER_NAME_MAX_LENGTH, User
 
 
 class RegisterForm(forms.Form):
-    name = forms.CharField(max_length=124, label='Имя')
-    surname = forms.CharField(max_length=124, label='Фамилия')
+    name = forms.CharField(max_length=USER_NAME_MAX_LENGTH, label='Имя')
+    surname = forms.CharField(max_length=USER_NAME_MAX_LENGTH, label='Фамилия')
     email = forms.EmailField(label='Email')
     password = forms.CharField(widget=forms.PasswordInput, label='Пароль')
 

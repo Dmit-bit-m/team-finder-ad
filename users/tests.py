@@ -5,8 +5,27 @@ from django.test import TestCase
 
 User = get_user_model()
 
+# Default user data
+DEFAULT_EMAIL = 'user@example.com'
+DEFAULT_NAME = 'Иван'
+DEFAULT_SURNAME = 'Петров'
+DEFAULT_PASSWORD = 'testpass123'
 
-def create_user(email='user@example.com', name='Иван', surname='Петров', password='testpass123'):
+# URLs
+REGISTER_URL = '/users/register/'
+LOGIN_URL = '/users/login/'
+LOGOUT_URL = '/users/logout/'
+PROJECT_LIST_URL = '/projects/list/'
+EDIT_PROFILE_URL = '/users/edit-profile/'
+CHANGE_PASSWORD_URL = '/users/change-password/'
+
+
+def create_user(
+    email=DEFAULT_EMAIL,
+    name=DEFAULT_NAME,
+    surname=DEFAULT_SURNAME,
+    password=DEFAULT_PASSWORD,
+):
     return User.objects.create_user(email=email, name=name, surname=surname, password=password)
 
 
@@ -16,11 +35,11 @@ def create_user(email='user@example.com', name='Иван', surname='Петров
 
 class RegistrationPageTest(TestCase):
     def test_register_page_returns_200(self):
-        response = self.client.get('/users/register/')
+        response = self.client.get(REGISTER_URL)
         self.assertEqual(response.status_code, HTTPStatus.OK)
 
     def test_register_page_contains_form_fields(self):
-        response = self.client.get('/users/register/')
+        response = self.client.get(REGISTER_URL)
         self.assertContains(response, 'name="name"')
         self.assertContains(response, 'name="surname"')
         self.assertContains(response, 'name="email"')
@@ -28,31 +47,32 @@ class RegistrationPageTest(TestCase):
 
 
 class RegistrationSubmitTest(TestCase):
+    ALICE_EMAIL = 'alice@example.com'
     VALID_DATA = {
         'name': 'Алиса',
         'surname': 'Смирнова',
         'email': 'alice@example.com',
-        'password': 'testpass123',
+        'password': DEFAULT_PASSWORD,
     }
 
     def test_valid_registration_redirects_to_login(self):
-        response = self.client.post('/users/register/', self.VALID_DATA)
-        self.assertRedirects(response, '/users/login/')
+        response = self.client.post(REGISTER_URL, self.VALID_DATA)
+        self.assertRedirects(response, LOGIN_URL)
 
     def test_valid_registration_creates_user(self):
-        self.client.post('/users/register/', self.VALID_DATA)
-        self.assertTrue(User.objects.filter(email='alice@example.com').exists())
+        self.client.post(REGISTER_URL, self.VALID_DATA)
+        self.assertTrue(User.objects.filter(email=self.ALICE_EMAIL).exists())
 
     def test_registration_auto_generates_avatar(self):
-        self.client.post('/users/register/', self.VALID_DATA)
-        user = User.objects.get(email='alice@example.com')
+        self.client.post(REGISTER_URL, self.VALID_DATA)
+        user = User.objects.get(email=self.ALICE_EMAIL)
         self.assertTrue(bool(user.avatar))
 
     def test_duplicate_email_rerenders_form(self):
-        create_user(email='alice@example.com')
-        response = self.client.post('/users/register/', self.VALID_DATA)
+        create_user(email=self.ALICE_EMAIL)
+        response = self.client.post(REGISTER_URL, self.VALID_DATA)
         self.assertEqual(response.status_code, HTTPStatus.OK)
-        self.assertEqual(User.objects.filter(email='alice@example.com').count(), 1)
+        self.assertEqual(User.objects.filter(email=self.ALICE_EMAIL).count(), 1)
 
 
 # ---------------------------------------------------------------------------
@@ -63,37 +83,39 @@ class LoginTest(TestCase):
     def setUp(self):
         self.user = create_user()
 
+    WRONG_PASSWORD = 'wrongpass'
+
     def test_login_page_returns_200(self):
-        response = self.client.get('/users/login/')
+        response = self.client.get(LOGIN_URL)
         self.assertEqual(response.status_code, HTTPStatus.OK)
 
     def test_valid_credentials_redirect_to_project_list(self):
-        response = self.client.post('/users/login/', {
-            'email': 'user@example.com',
-            'password': 'testpass123',
+        response = self.client.post(LOGIN_URL, {
+            'email': DEFAULT_EMAIL,
+            'password': DEFAULT_PASSWORD,
         })
-        self.assertRedirects(response, '/projects/list/')
+        self.assertRedirects(response, PROJECT_LIST_URL)
 
     def test_valid_login_authenticates_user(self):
-        self.client.post('/users/login/', {
-            'email': 'user@example.com',
-            'password': 'testpass123',
+        self.client.post(LOGIN_URL, {
+            'email': DEFAULT_EMAIL,
+            'password': DEFAULT_PASSWORD,
         })
-        response = self.client.get('/projects/list/')
+        response = self.client.get(PROJECT_LIST_URL)
         self.assertTrue(response.wsgi_request.user.is_authenticated)
 
     def test_wrong_password_rerenders_form(self):
-        response = self.client.post('/users/login/', {
-            'email': 'user@example.com',
-            'password': 'wrongpass',
+        response = self.client.post(LOGIN_URL, {
+            'email': DEFAULT_EMAIL,
+            'password': self.WRONG_PASSWORD,
         })
         self.assertEqual(response.status_code, HTTPStatus.OK)
         self.assertFalse(response.wsgi_request.user.is_authenticated)
 
     def test_wrong_password_shows_error_message(self):
-        response = self.client.post('/users/login/', {
-            'email': 'user@example.com',
-            'password': 'wrongpass',
+        response = self.client.post(LOGIN_URL, {
+            'email': DEFAULT_EMAIL,
+            'password': self.WRONG_PASSWORD,
         })
         self.assertContains(response, 'Неверный email или пароль')
 
@@ -104,13 +126,13 @@ class LogoutTest(TestCase):
 
     def test_logout_redirects_to_project_list(self):
         self.client.force_login(self.user)
-        response = self.client.get('/users/logout/')
-        self.assertRedirects(response, '/projects/list/')
+        response = self.client.get(LOGOUT_URL)
+        self.assertRedirects(response, PROJECT_LIST_URL)
 
     def test_after_logout_user_is_anonymous(self):
         self.client.force_login(self.user)
-        self.client.get('/users/logout/')
-        response = self.client.get('/projects/list/')
+        self.client.get(LOGOUT_URL)
+        response = self.client.get(PROJECT_LIST_URL)
         self.assertFalse(response.wsgi_request.user.is_authenticated)
 
 
@@ -163,14 +185,14 @@ class UserProfileTest(TestCase):
 
 class EditProfileAccessTest(TestCase):
     def test_edit_profile_requires_auth(self):
-        response = self.client.get('/users/edit-profile/')
+        response = self.client.get(EDIT_PROFILE_URL)
         self.assertEqual(response.status_code, HTTPStatus.FOUND)
-        self.assertIn('/users/login/', response['Location'])
+        self.assertIn(LOGIN_URL, response['Location'])
 
     def test_edit_profile_returns_200_for_authenticated(self):
         user = create_user()
         self.client.force_login(user)
-        response = self.client.get('/users/edit-profile/')
+        response = self.client.get(EDIT_PROFILE_URL)
         self.assertEqual(response.status_code, HTTPStatus.OK)
 
 
@@ -180,8 +202,8 @@ class EditProfilePhoneTest(TestCase):
         self.client.force_login(self.user)
 
     def _post(self, phone):
-        return self.client.post('/users/edit-profile/', {
-            'name': 'Иван', 'surname': 'Петров',
+        return self.client.post(EDIT_PROFILE_URL, {
+            'name': DEFAULT_NAME, 'surname': DEFAULT_SURNAME,
             'phone': phone, 'github_url': '', 'about': '',
         })
 
@@ -217,18 +239,21 @@ class EditProfileGithubTest(TestCase):
         self.user = create_user()
         self.client.force_login(self.user)
 
+    GITLAB_URL = 'https://gitlab.com/user'
+    GITHUB_URL = 'https://github.com/user'
+
     def test_non_github_url_rerenders_form(self):
-        response = self.client.post('/users/edit-profile/', {
-            'name': 'Иван', 'surname': 'Петров',
-            'phone': '', 'github_url': 'https://gitlab.com/user', 'about': '',
+        response = self.client.post(EDIT_PROFILE_URL, {
+            'name': DEFAULT_NAME, 'surname': DEFAULT_SURNAME,
+            'phone': '', 'github_url': self.GITLAB_URL, 'about': '',
         })
         self.assertEqual(response.status_code, HTTPStatus.OK)
         self.assertContains(response, 'GitHub (github.com)')
 
     def test_valid_github_url_accepted(self):
-        response = self.client.post('/users/edit-profile/', {
-            'name': 'Иван', 'surname': 'Петров',
-            'phone': '', 'github_url': 'https://github.com/user', 'about': '',
+        response = self.client.post(EDIT_PROFILE_URL, {
+            'name': DEFAULT_NAME, 'surname': DEFAULT_SURNAME,
+            'phone': '', 'github_url': self.GITHUB_URL, 'about': '',
         })
         self.assertEqual(response.status_code, HTTPStatus.FOUND)
 
@@ -239,49 +264,53 @@ class EditProfileGithubTest(TestCase):
 
 class ChangePasswordTest(TestCase):
     def setUp(self):
-        self.user = create_user(password='oldpass123')
+        self.user = create_user(password=self.OLD_PASSWORD)
         self.client.force_login(self.user)
+
+    OLD_PASSWORD = 'oldpass123'
+    NEW_PASSWORD = 'newpass456'
+    MISMATCHED_PASSWORD = 'different789'
 
     def test_change_password_requires_auth(self):
         self.client.logout()
-        response = self.client.get('/users/change-password/')
+        response = self.client.get(CHANGE_PASSWORD_URL)
         self.assertEqual(response.status_code, HTTPStatus.FOUND)
-        self.assertIn('/users/login/', response['Location'])
+        self.assertIn(LOGIN_URL, response['Location'])
 
     def test_change_password_page_returns_200(self):
-        response = self.client.get('/users/change-password/')
+        response = self.client.get(CHANGE_PASSWORD_URL)
         self.assertEqual(response.status_code, HTTPStatus.OK)
 
     def test_successful_change_redirects_to_profile(self):
-        response = self.client.post('/users/change-password/', {
-            'old_password': 'oldpass123',
-            'new_password1': 'newpass456',
-            'new_password2': 'newpass456',
+        response = self.client.post(CHANGE_PASSWORD_URL, {
+            'old_password': self.OLD_PASSWORD,
+            'new_password1': self.NEW_PASSWORD,
+            'new_password2': self.NEW_PASSWORD,
         })
         self.assertRedirects(response, f'/users/{self.user.id}/')
 
     def test_successful_change_updates_password(self):
-        self.client.post('/users/change-password/', {
-            'old_password': 'oldpass123',
-            'new_password1': 'newpass456',
-            'new_password2': 'newpass456',
+        self.client.post(CHANGE_PASSWORD_URL, {
+            'old_password': self.OLD_PASSWORD,
+            'new_password1': self.NEW_PASSWORD,
+            'new_password2': self.NEW_PASSWORD,
         })
         self.user.refresh_from_db()
-        self.assertTrue(self.user.check_password('newpass456'))
+        self.assertTrue(self.user.check_password(self.NEW_PASSWORD))
 
     def test_wrong_old_password_rerenders_form(self):
-        response = self.client.post('/users/change-password/', {
+        response = self.client.post(CHANGE_PASSWORD_URL, {
             'old_password': 'wrongpass',
-            'new_password1': 'newpass456',
-            'new_password2': 'newpass456',
+            'new_password1': self.NEW_PASSWORD,
+            'new_password2': self.NEW_PASSWORD,
         })
         self.assertEqual(response.status_code, HTTPStatus.OK)
 
     def test_mismatched_new_passwords_rerenders_form(self):
-        response = self.client.post('/users/change-password/', {
-            'old_password': 'oldpass123',
-            'new_password1': 'newpass456',
-            'new_password2': 'different789',
+        response = self.client.post(CHANGE_PASSWORD_URL, {
+            'old_password': self.OLD_PASSWORD,
+            'new_password1': self.NEW_PASSWORD,
+            'new_password2': self.MISMATCHED_PASSWORD,
         })
         self.assertEqual(response.status_code, HTTPStatus.OK)
 
@@ -295,24 +324,26 @@ class UsersListTest(TestCase):
         for i in range(15):
             create_user(email=f'user{i}@example.com', name=f'User{i}', surname='Test')
 
+    USERS_LIST_URL = '/users/list/'
+
     def test_users_list_returns_200(self):
-        response = self.client.get('/users/list/')
+        response = self.client.get(self.USERS_LIST_URL)
         self.assertEqual(response.status_code, HTTPStatus.OK)
 
     def test_users_list_accessible_without_auth(self):
-        response = self.client.get('/users/list/')
+        response = self.client.get(self.USERS_LIST_URL)
         self.assertEqual(response.status_code, HTTPStatus.OK)
 
     def test_users_list_paginates_12_per_page(self):
-        response = self.client.get('/users/list/')
+        response = self.client.get(self.USERS_LIST_URL)
         self.assertEqual(len(response.context['participants'].object_list), 12)
 
     def test_users_list_second_page_has_remaining_users(self):
-        response = self.client.get('/users/list/?page=2')
+        response = self.client.get(f'{self.USERS_LIST_URL}?page=2')
         self.assertEqual(response.status_code, HTTPStatus.OK)
         self.assertEqual(len(response.context['participants'].object_list), 3)
 
     def test_users_list_sorted_newest_first(self):
-        response = self.client.get('/users/list/')
+        response = self.client.get(self.USERS_LIST_URL)
         ids = [u.id for u in response.context['participants'].object_list]
         self.assertEqual(ids, sorted(ids, reverse=True))
