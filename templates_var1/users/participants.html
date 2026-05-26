@@ -44,9 +44,9 @@
         </div>
     {% endif %}
 
-    {% if page_obj.object_list %}
+    {% if participants %}
     <div class="participants-grid">
-        {% for participant in page_obj %}
+        {% for participant in participants %}
         <div class="participant-card">
             <div class="participant-card-header">
                 {% if participant.avatar %}
@@ -67,23 +67,6 @@
         </div>
         {% endfor %}
     </div>
-    {% if page_obj.has_other_pages %}
-    <div class="pagination">
-        {% if page_obj.has_previous %}
-        <a href="?{{ query_prefix }}page={{ page_obj.previous_page_number }}" class="page-btn">←</a>
-        {% endif %}
-        {% for num in page_obj.paginator.page_range %}
-        {% if page_obj.number == num %}
-        <span class="page-btn active">{{ num }}</span>
-        {% else %}
-        <a href="?{{ query_prefix }}page={{ num }}" class="page-btn">{{ num }}</a>
-        {% endif %}
-        {% endfor %}
-        {% if page_obj.has_next %}
-        <a href="?{{ query_prefix }}page={{ page_obj.next_page_number }}" class="page-btn">→</a>
-        {% endif %}
-    </div>
-    {% endif %}
     {% else %}
     {% include 'includes/empty-project-card.html' with empty_title="Пока нет участников" empty_message="Попробуйте сбросить фильтр" button_link="/users/list" button_text="Сбросить" %}
     {% endif %}

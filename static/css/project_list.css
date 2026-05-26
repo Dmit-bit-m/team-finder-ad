@@ -234,37 +234,3 @@
     text-decoration: underline;
     color: #666;
 }
-
-.pagination {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    gap: 8px;
-    margin-top: 40px;
-}
-
-.page-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 36px;
-    height: 36px;
-    padding: 0 10px;
-    border: 1px solid #ddd;
-    border-radius: 8px;
-    font-size: 14px;
-    text-decoration: none;
-    color: #333;
-    background: white;
-    transition: background 0.2s;
-}
-
-.page-btn:hover {
-    background: #f0f0f0;
-}
-
-.page-btn.active {
-    background: #333;
-    color: white;
-    border-color: #333;
-}
